@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const msg = require("./messages").messages;
 const Url = require("url");
+let statusBarItem;
 
 function patchAlreadyEnabled(html) {
   return html.indexOf("!! VSCODE-UI-TWEAK-START !!") >= 0;
@@ -70,7 +71,7 @@ const removePatch = async () => {
   );
   try {
     await fs.promises.writeFile(htmlFile, html, "utf-8");
-    enabledRestart();
+    disabledRestart();
   } catch (e) {
     vscode.window.showInformationMessage(msg.admin);
   }
@@ -110,25 +111,11 @@ const addPatch = async () => {
     "<!-- !! $& !! -->"
   );
 
-  let indicatorJsPath;
   let ext = vscode.extensions.getExtension("vscode-ui-tweaks");
-  console.log(ext);
-
-  if (ext && ext.extensionPath) {
-    indicatorJsPath = path.resolve(ext.extensionPath, "src/statusbar.js");
-  } else {
-    indicatorJsPath = path.resolve(__dirname, "statusbar.js");
-  }
-  const indicatorJsContent = await fs.promises.readFile(
-    indicatorJsPath,
-    "utf-8"
-  );
-  const indicatorJS = `<script>${indicatorJsContent}</script>`;
 
   html = html.replace(
     /(<\/html>)/,
     "<!-- !! VSCODE-UI-TWEAK-START !! -->\n" +
-      indicatorJS +
       injectHTML +
       "<!-- !! VSCODE-UI-TWEAK-END !! -->\n</html>"
   );
@@ -145,15 +132,31 @@ function activate(context) {
     "vscode-ui-tweaks.addPatch",
     addPatch
   );
-
-  context.subscriptions.push(enable);
-
   let disable = vscode.commands.registerCommand(
     "vscode-ui-tweaks.removePatch",
     removePatch
   );
-
+  context.subscriptions.push(enable);
   context.subscriptions.push(disable);
+
+  statusBarItem = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Right,
+    100
+  );
+  fs.promises.readFile(htmlFile, "utf-8").then((html) => {
+    console.log("is the extension activated or not");
+    const enabled = patchAlreadyEnabled(html);
+    context.subscriptions.push(statusBarItem);
+    statusBarItem.command = enabled
+      ? "vscode-ui-tweaks.removePatch"
+      : "vscode-ui-tweaks.addPatch";
+    statusBarItem.tooltip = enabled
+      ? "Disable vscode-ui-tweaks"
+      : "Enable vscode-ui-tweaks";
+    statusBarItem.name = "vscode-ui-tweaks";
+    statusBarItem.text = "$(squirrel)";
+    statusBarItem.show();
+  });
 }
 
 // This method is called when your extension is deactivated
